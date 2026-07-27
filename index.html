@@ -1287,13 +1287,14 @@
         /* ---------------------------------------------------------------
            Where the app lives.
 
-           This page is served from staffdesk.space (Vercel); the application
-           lives on app.staffdesk.space (the bot host). They have to be
-           separate because login cannot be static — the token exchange needs
-           the Discord client secret, so it must happen on the host running
-           bot.py.
+           Where the application lives. This page is static and can sit on
+           Vercel; login cannot, because the token exchange needs the Discord
+           client secret and so must happen on the host running bot.py.
 
-           Set this to '' if you ever serve everything from one host.
+           Currently the Folium host directly. Once app.staffdesk.space is
+           live, change this to 'https://app.staffdesk.space' and update the
+           two matching values in .env. Set it to '' if you ever serve
+           everything from one host.
            --------------------------------------------------------------- */
         /* ---------------------------------------------------------------
            Appearance. 'auto' removes the override and lets the OS decide;
@@ -1328,7 +1329,7 @@
           paint(readTheme());
         }
 
-        const APP_ORIGIN = 'https://app.staffdesk.space';
+        const APP_ORIGIN = 'http://n-nyc-23.folium.host:25675';
 
         /* Only rewrite when this page is NOT being served by the app itself.
            The same file is deployed to Vercel and shipped with the bot, and on
