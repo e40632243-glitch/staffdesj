@@ -1,0 +1,1342 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>StaffDesk — Staff management for Discord communities</title>
+    <meta
+      name="description"
+      content="StaffDesk reads your Discord roles and turns them into staff profiles, warnings, tasks and a searchable audit log."
+    />
+    <link rel="icon" href="logo.png" />
+
+    <!-- Applied before first paint. Reading the stored choice later would
+         flash a white page at anyone using dark mode on every navigation. -->
+    <script>
+      (() => {
+        try {
+          const t = localStorage.getItem('sd-theme');
+          if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t;
+        } catch (e) {}
+      })();
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..900&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      /* ===================================================================
+         StaffDesk — design tokens
+
+         The palette is deliberately three neutrals and one brand colour.
+         Discord blurple appears exactly once, on the Discord auth button, so
+         that colour on this page always means "this action goes to Discord".
+         Everything else earns its hierarchy from weight and spacing.
+         =================================================================== */
+      /* Light is the designed default; dark is derived from the same tokens.
+         --brandflip inverts the wordmark, which is black artwork on white and
+         would otherwise be an invisible mark inside a white box. */
+      :root {
+        --paper: #ffffff;
+        --ink: #000000;
+        --ink-soft: #6b6b6b;
+        --ink-faint: #949494;
+        --rule: #e5e5e5;
+        --surface: #fafafa;
+        --on-ink: #ffffff;
+        --edge: #cfcfcf;
+        --brandflip: 0;
+        --discord: #5865f2;
+        --discord-hover: #4752c4;
+        color-scheme: light;
+
+        --measure: 1120px;
+        --gutter: 24px;
+
+        --step-eyebrow: 0.6875rem;
+        --step-small: 0.8125rem;
+        --step-body: 1rem;
+        --step-lead: clamp(1.0625rem, 0.95rem + 0.5vw, 1.25rem);
+        --step-h3: clamp(1.125rem, 1rem + 0.5vw, 1.375rem);
+        --step-h2: clamp(1.75rem, 1.2rem + 2.2vw, 3rem);
+        --step-h1: clamp(2.5rem, 1.2rem + 5.4vw, 5.25rem);
+
+        --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+      }
+
+      :root[data-theme='dark'] {
+        --paper: #0c0c0d;
+        --ink: #f2f2f3;
+        --ink-soft: #a0a0a6;
+        --ink-faint: #6c6c74;
+        --rule: #232328;
+        --surface: #151518;
+        --on-ink: #0c0c0d;
+        --edge: #37373f;
+        --brandflip: 1;
+        color-scheme: dark;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme='light']) {
+          --paper: #0c0c0d;
+          --ink: #f2f2f3;
+          --ink-soft: #a0a0a6;
+          --ink-faint: #6c6c74;
+          --rule: #232328;
+          --surface: #151518;
+          --on-ink: #0c0c0d;
+          --edge: #37373f;
+          --brandflip: 1;
+          color-scheme: dark;
+        }
+      }
+
+      ::selection {
+        background: var(--ink);
+        color: var(--on-ink);
+      }
+
+      * {
+        scrollbar-color: var(--edge) transparent;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      html {
+        -webkit-text-size-adjust: 100%;
+      }
+
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: 'Archivo', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+        font-size: var(--step-body);
+        line-height: 1.55;
+        font-variation-settings: 'wdth' 100;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      img {
+        max-width: 100%;
+        display: block;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      /* Visible, unmistakable focus. Keyboard users get the same clarity the
+         rest of the page is built for. */
+      :focus-visible {
+        outline: 2px solid var(--ink);
+        outline-offset: 3px;
+      }
+
+      .shell {
+        width: 100%;
+        max-width: var(--measure);
+        margin-inline: auto;
+        padding-inline: var(--gutter);
+      }
+
+      /* --- Shared type roles ------------------------------------------- */
+      .eyebrow {
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+        font-size: var(--step-eyebrow);
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+        margin: 0;
+      }
+
+      .mono {
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+        font-size: var(--step-small);
+        font-variant-ligatures: none;
+      }
+
+      .display {
+        font-variation-settings:
+          'wdth' 112,
+          'wght' 800;
+        letter-spacing: -0.035em;
+        line-height: 0.95;
+        margin: 0;
+        text-wrap: balance;
+      }
+
+      .lede {
+        font-size: var(--step-lead);
+        color: var(--ink-soft);
+        line-height: 1.5;
+        margin: 0;
+        max-width: 34em;
+        text-wrap: pretty;
+      }
+
+      /* --- Buttons ------------------------------------------------------ */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+        height: 46px;
+        padding-inline: 22px;
+        border: 1px solid var(--ink);
+        border-radius: 7px;
+        background: var(--ink);
+        color: var(--on-ink);
+        font: inherit;
+        font-size: 0.9375rem;
+        font-variation-settings: 'wght' 600;
+        text-decoration: none;
+        cursor: pointer;
+        transition:
+          background-color 0.16s var(--ease),
+          border-color 0.16s var(--ease),
+          transform 0.16s var(--ease);
+      }
+
+      /* Opacity rather than a hardcoded lighter black, so the hover reads
+         correctly in both themes without a second colour token. */
+      .btn:hover {
+        opacity: 0.86;
+      }
+
+      .btn:active {
+        transform: translateY(1px);
+      }
+
+      .btn--ghost {
+        background: transparent;
+        color: var(--ink);
+        border-color: var(--rule);
+      }
+
+      .btn--ghost:hover {
+        background: var(--surface);
+        border-color: var(--edge);
+      }
+
+      .btn--discord {
+        background: var(--discord);
+        border-color: var(--discord);
+        color: #fff;
+      }
+
+      .btn--discord:hover {
+        background: var(--discord-hover);
+        border-color: var(--discord-hover);
+      }
+
+      .btn--sm {
+        height: 36px;
+        padding-inline: 14px;
+        font-size: 0.8438rem;
+        border-radius: 6px;
+      }
+
+      .btn svg {
+        flex: none;
+      }
+
+      /* --- Header ------------------------------------------------------- */
+      .masthead {
+        position: sticky;
+        top: 0;
+        z-index: 40;
+        background: var(--paper);
+        border-bottom: 1px solid var(--rule);
+        backdrop-filter: saturate(140%) blur(6px);
+      }
+
+      .masthead__inner {
+        display: flex;
+        align-items: center;
+        gap: 28px;
+        height: 62px;
+      }
+
+      /* The wordmark.
+         staffdesk.png is a 1179x801 canvas on which the artwork occupies only
+         a band 924x114 in the middle — 14% of the file's height. Dropping the
+         file straight into an <img> sized for a header would draw the letters
+         about two pixels tall. So the measured content box is cropped out with
+         background-size/position, and the element carries the artwork's real
+         8.1:1 aspect ratio. Height is then the only knob anyone needs. */
+      .wordmark {
+        display: block;
+        margin-right: auto;
+        text-decoration: none;
+        line-height: 0;
+      }
+
+      /* Width is stated outright rather than derived from aspect-ratio: a
+         display:block box already has an auto width, so aspect-ratio would
+         size the height from the width instead of the other way round. 26 x
+         8.105 = 211. */
+      .wordmark__art {
+        display: block;
+        width: 211px;
+        height: 26px;
+        background-image: url('staffdesk.png');
+        background-repeat: no-repeat;
+        background-size: 127.6% 702.63%;
+        background-position: 57.25% 51.53%;
+        /* Black artwork on a white ground: inverting flips both, so the
+           letters go white and the ground disappears into a dark page. */
+        filter: invert(var(--brandflip));
+      }
+
+      @media (max-width: 560px) {
+        .wordmark__art {
+          width: 154px;
+          height: 19px;
+        }
+      }
+
+      .nav {
+        display: flex;
+        align-items: center;
+        gap: 26px;
+      }
+
+      .nav a {
+        font-size: 0.875rem;
+        color: var(--ink-soft);
+        text-decoration: none;
+        font-variation-settings: 'wght' 500;
+        transition: color 0.15s var(--ease);
+      }
+
+      .nav a:hover {
+        color: var(--ink);
+      }
+
+      /* --- Appearance control ------------------------------------------- */
+      .theme {
+        display: inline-flex;
+        gap: 2px;
+        padding: 3px;
+        border: 1px solid var(--rule);
+        border-radius: 9px;
+        margin-left: auto;
+      }
+
+      .theme button {
+        display: grid;
+        place-items: center;
+        width: 28px;
+        height: 24px;
+        padding: 0;
+        border: 0;
+        border-radius: 6px;
+        background: none;
+        color: var(--ink-faint);
+        cursor: pointer;
+        transition:
+          color 0.14s var(--ease),
+          background-color 0.14s var(--ease);
+      }
+
+      .theme button svg {
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .theme button:hover {
+        color: var(--ink);
+        background: var(--surface);
+      }
+
+      .theme button[aria-pressed='true'] {
+        background: var(--surface);
+        color: var(--ink);
+      }
+
+      @media (max-width: 720px) {
+        .nav {
+          display: none;
+        }
+      }
+
+      /* --- Hero --------------------------------------------------------- */
+      .hero {
+        padding-block: clamp(56px, 8vw, 104px) clamp(40px, 5vw, 64px);
+      }
+
+      .hero__eyebrow {
+        margin-bottom: 26px;
+      }
+
+      .hero h1 {
+        font-size: var(--step-h1);
+        max-width: 15ch;
+      }
+
+      .hero__lede {
+        margin-top: 26px;
+      }
+
+      .hero__actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 11px;
+        margin-top: 34px;
+      }
+
+      .hero__note {
+        margin-top: 18px;
+        color: var(--ink-faint);
+        font-size: var(--step-small);
+      }
+
+      /* ===================================================================
+         Signature: the detection panel
+
+         This is the one place the page spends its boldness. It shows the
+         actual job /setup does — read a role list, decide what is staff and
+         why — because that reasoning is the product, and a screenshot of a
+         dashboard would not show it.
+         =================================================================== */
+      .detector {
+        margin-top: clamp(48px, 6vw, 76px);
+        border: 1px solid var(--rule);
+        border-radius: 12px;
+        overflow: hidden;
+        background: var(--paper);
+      }
+
+      .detector__bar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--rule);
+        background: var(--surface);
+      }
+
+      .detector__cmd {
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+        font-size: var(--step-small);
+        font-weight: 500;
+      }
+
+      .detector__status {
+        margin-left: auto;
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+        font-size: var(--step-eyebrow);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+      }
+
+      .detector__grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .detector__col + .detector__col {
+        border-left: 1px solid var(--rule);
+      }
+
+      .detector__head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 16px 12px;
+        border-bottom: 1px solid var(--rule);
+      }
+
+      .detector__head h3 {
+        margin: 0;
+        font-size: var(--step-eyebrow);
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+        font-weight: 500;
+        color: var(--ink);
+      }
+
+      .detector__count {
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+        font-size: var(--step-eyebrow);
+        color: var(--ink-faint);
+      }
+
+      .rolelist {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+
+      .rolelist li {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 11px 16px;
+        min-height: 46px;
+        border-bottom: 1px solid var(--rule);
+      }
+
+      .rolelist li:last-child {
+        border-bottom: 0;
+      }
+
+      /* Discord shows a coloured dot per role. Rendered in greys here: the
+         page's one colour is reserved for the Discord button. */
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--ink);
+        flex: none;
+      }
+
+      .dot--soft {
+        background: #b4b4b4;
+      }
+
+      .role__name {
+        font-size: 0.875rem;
+        font-variation-settings: 'wght' 500;
+      }
+
+      .role__pos {
+        margin-left: auto;
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+        font-size: var(--step-eyebrow);
+        color: var(--ink-faint);
+      }
+
+      /* Right-hand column: one row per source role, revealed in sequence. */
+      .verdicts li {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 3px;
+        opacity: 0;
+        transform: translateY(4px);
+        transition:
+          opacity 0.36s var(--ease),
+          transform 0.36s var(--ease);
+      }
+
+      .verdicts.is-live li {
+        opacity: 1;
+        transform: none;
+      }
+
+      .verdict__top {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+      }
+
+      .rank {
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+        font-size: 0.75rem;
+        font-weight: 500;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        border: 1px solid var(--ink);
+        border-radius: 4px;
+        padding: 1px 7px;
+      }
+
+      .rank--none {
+        border-color: var(--rule);
+        color: var(--ink-faint);
+      }
+
+      .verdict__why {
+        font-size: 0.8125rem;
+        color: var(--ink-soft);
+      }
+
+      .confidence {
+        margin-left: auto;
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+        font-size: var(--step-eyebrow);
+        letter-spacing: 0.08em;
+        color: var(--ink-faint);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .verdicts li {
+          opacity: 1;
+          transform: none;
+          transition: none;
+        }
+      }
+
+      @media (max-width: 760px) {
+        .detector__grid {
+          grid-template-columns: 1fr;
+        }
+        .detector__col + .detector__col {
+          border-left: 0;
+          border-top: 1px solid var(--rule);
+        }
+      }
+
+      /* --- Section scaffolding ------------------------------------------ */
+      .band {
+        padding-block: clamp(64px, 8vw, 108px);
+        border-top: 1px solid var(--rule);
+      }
+
+      .band__head {
+        max-width: 46ch;
+        margin-bottom: clamp(36px, 4vw, 56px);
+      }
+
+      .band__head h2 {
+        font-size: var(--step-h2);
+        margin: 14px 0 0;
+      }
+
+      .band__head p {
+        margin: 16px 0 0;
+        color: var(--ink-soft);
+        font-size: var(--step-lead);
+        line-height: 1.5;
+      }
+
+      /* --- Features ------------------------------------------------------ */
+      .features {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        border: 1px solid var(--rule);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+
+      .feature {
+        padding: clamp(24px, 3vw, 36px);
+        border-right: 1px solid var(--rule);
+        border-bottom: 1px solid var(--rule);
+      }
+
+      /* Trim the outer edges so the grid reads as one framed block rather
+         than a set of boxes with doubled borders. */
+      .feature:nth-child(2n) {
+        border-right: 0;
+      }
+
+      .feature:nth-last-child(-n + 2) {
+        border-bottom: 0;
+      }
+
+      .feature h3 {
+        font-size: var(--step-h3);
+        font-variation-settings:
+          'wdth' 106,
+          'wght' 700;
+        letter-spacing: -0.02em;
+        margin: 12px 0 0;
+      }
+
+      .feature p {
+        margin: 10px 0 0;
+        color: var(--ink-soft);
+        font-size: 0.9375rem;
+      }
+
+      .feature__demo {
+        margin-top: 20px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--surface);
+        padding: 12px 14px;
+      }
+
+      .kv {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+        font-size: var(--step-small);
+        padding-block: 4px;
+      }
+
+      .kv + .kv {
+        border-top: 1px solid var(--rule);
+      }
+
+      .kv span:last-child {
+        color: var(--ink-soft);
+        text-align: right;
+      }
+
+      @media (max-width: 720px) {
+        .features {
+          grid-template-columns: 1fr;
+        }
+        .feature {
+          border-right: 0;
+        }
+        .feature:nth-last-child(-n + 2):not(:last-child) {
+          border-bottom: 1px solid var(--rule);
+        }
+      }
+
+      /* --- How it works --------------------------------------------------
+         Numbered because this genuinely is a sequence: each step cannot
+         happen before the one above it. */
+      .steps {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        counter-reset: step;
+      }
+
+      .step {
+        display: grid;
+        grid-template-columns: 64px 1fr;
+        gap: 24px;
+        padding-block: 26px;
+        border-top: 1px solid var(--rule);
+        align-items: start;
+      }
+
+      .step:last-child {
+        border-bottom: 1px solid var(--rule);
+      }
+
+      .step::before {
+        counter-increment: step;
+        content: counter(step, decimal-leading-zero);
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+        font-size: 0.8125rem;
+        color: var(--ink-faint);
+        padding-top: 4px;
+      }
+
+      .step h3 {
+        margin: 0;
+        font-size: var(--step-h3);
+        font-variation-settings:
+          'wdth' 106,
+          'wght' 700;
+        letter-spacing: -0.02em;
+      }
+
+      .step p {
+        margin: 8px 0 0;
+        color: var(--ink-soft);
+        max-width: 58ch;
+      }
+
+      @media (max-width: 560px) {
+        .step {
+          grid-template-columns: 1fr;
+          gap: 8px;
+        }
+      }
+
+      /* --- FAQ ------------------------------------------------------------ */
+      .faq {
+        border-top: 1px solid var(--rule);
+      }
+
+      .faq details {
+        border-bottom: 1px solid var(--rule);
+      }
+
+      .faq summary {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding-block: 22px;
+        cursor: pointer;
+        list-style: none;
+        font-size: var(--step-h3);
+        font-variation-settings:
+          'wdth' 104,
+          'wght' 600;
+        letter-spacing: -0.015em;
+      }
+
+      .faq summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .faq summary::after {
+        content: '+';
+        margin-left: auto;
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+        font-size: 1.25rem;
+        color: var(--ink-faint);
+        transition: transform 0.18s var(--ease);
+      }
+
+      .faq details[open] summary::after {
+        content: '−';
+      }
+
+      .faq p {
+        margin: 0 0 24px;
+        color: var(--ink-soft);
+        max-width: 62ch;
+      }
+
+      /* --- Closing call --------------------------------------------------- */
+      .closer {
+        text-align: center;
+        padding-block: clamp(72px, 9vw, 120px);
+        border-top: 1px solid var(--rule);
+      }
+
+      .closer h2 {
+        font-size: var(--step-h2);
+        margin: 0 auto;
+        max-width: 18ch;
+      }
+
+      .closer .hero__actions {
+        justify-content: center;
+      }
+
+      /* --- Footer ---------------------------------------------------------- */
+      .footer {
+        border-top: 1px solid var(--rule);
+        padding-block: 40px 48px;
+      }
+
+      .footer__inner {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 28px;
+        align-items: center;
+      }
+
+      .footer__links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 22px;
+        margin-left: auto;
+      }
+
+      .footer__links a {
+        font-size: 0.875rem;
+        color: var(--ink-soft);
+        text-decoration: none;
+      }
+
+      .footer__links a:hover {
+        color: var(--ink);
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+
+      .footer__legal {
+        width: 100%;
+        color: var(--ink-faint);
+        font-size: var(--step-small);
+        margin-top: 8px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <header class="masthead">
+      <div class="shell masthead__inner">
+        <a class="wordmark" href="#top" aria-label="StaffDesk home">
+          <span class="wordmark__art" aria-hidden="true"></span>
+        </a>
+
+        <nav class="nav" aria-label="Primary">
+          <a href="#detection">Detection</a>
+          <a href="#features">Features</a>
+          <a href="#how">How it works</a>
+          <a href="#faq">FAQ</a>
+        </nav>
+
+        <div class="theme" role="group" aria-label="Appearance">
+          <button type="button" data-set="light" title="Light" aria-label="Light">
+            <svg width="15" height="15" viewBox="0 0 18 18" aria-hidden="true">
+              <circle cx="9" cy="9" r="3.4" />
+              <path
+                d="M9 1.4v2M9 14.6v2M16.6 9h-2M3.4 9h-2M14.4 3.6 13 5M5 13l-1.4 1.4M14.4 14.4 13 13M5 5 3.6 3.6"
+              />
+            </svg>
+          </button>
+          <button type="button" data-set="dark" title="Dark" aria-label="Dark">
+            <svg width="15" height="15" viewBox="0 0 18 18" aria-hidden="true">
+              <path d="M15 10.9A6.6 6.6 0 0 1 7.1 3a6.6 6.6 0 1 0 7.9 7.9Z" />
+            </svg>
+          </button>
+          <button type="button" data-set="auto" title="Match system" aria-label="Match system">
+            <svg width="15" height="15" viewBox="0 0 18 18" aria-hidden="true">
+              <rect x="2.2" y="3.2" width="13.6" height="9.4" rx="1.6" />
+              <path d="M6.5 15.6h5" />
+            </svg>
+          </button>
+        </div>
+
+        <a class="btn btn--ghost btn--sm" href="login.html">Log in with Discord</a>
+      </div>
+    </header>
+
+    <main id="top">
+      <!-- ============================ HERO ============================ -->
+      <section class="shell hero">
+        <p class="eyebrow hero__eyebrow">Works with the roles you already have</p>
+
+        <h1 class="display">Your staff team, on the record.</h1>
+
+        <p class="lede hero__lede">
+          StaffDesk reads your Discord roles, builds a profile for every staff member, and keeps
+          warnings, tasks and promotions in one place your whole team can see.
+        </p>
+
+        <div class="hero__actions">
+          <a class="btn" href="login.html">Create Your Workspace</a>
+          <a class="btn btn--discord" href="login.html">
+            <svg width="18" height="14" viewBox="0 0 71 55" aria-hidden="true" fill="currentColor">
+              <path
+                d="M60.1 4.9A58.5 58.5 0 0 0 45.6.4a.2.2 0 0 0-.2.1c-.6 1.1-1.3 2.6-1.8 3.7a54 54 0 0 0-16.2 0c-.5-1.2-1.2-2.6-1.9-3.7a.2.2 0 0 0-.2-.1c-5 .9-9.9 2.4-14.4 4.5a.2.2 0 0 0-.1.1C1.6 18.7-1 32.1.3 45.4c0 .1 0 .2.1.2a58.9 58.9 0 0 0 17.8 9 .2.2 0 0 0 .2-.1c1.4-1.9 2.6-3.9 3.7-6a.2.2 0 0 0-.1-.3 38.8 38.8 0 0 1-5.5-2.6.2.2 0 0 1 0-.4l1.1-.9a.2.2 0 0 1 .2 0 42 42 0 0 0 35.6 0 .2.2 0 0 1 .2 0l1.1.9a.2.2 0 0 1 0 .4 36.4 36.4 0 0 1-5.5 2.6.2.2 0 0 0-.1.3c1.1 2.1 2.3 4.1 3.7 6a.2.2 0 0 0 .2.1 58.7 58.7 0 0 0 17.8-9 .2.2 0 0 0 .1-.2c1.5-15.3-2.5-28.6-10.7-40.4a.2.2 0 0 0-.1-.1ZM23.7 37.3c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2c3.6 0 6.5 3.3 6.4 7.2 0 4-2.8 7.2-6.4 7.2Zm23.7 0c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2c3.6 0 6.5 3.3 6.4 7.2 0 4-2.8 7.2-6.4 7.2Z"
+              />
+            </svg>
+            Log in with Discord
+          </a>
+        </div>
+
+        <p class="hero__note">Free while in beta · Setup takes about a minute</p>
+
+        <!-- ===================== SIGNATURE: DETECTION ===================== -->
+        <div class="detector" id="detection">
+          <div class="detector__bar">
+            <span class="dot" aria-hidden="true"></span>
+            <span class="detector__cmd">/setup</span>
+            <span class="detector__status" data-status>Scanning roles…</span>
+          </div>
+
+          <div class="detector__grid">
+            <div class="detector__col">
+              <div class="detector__head">
+                <h3>Discord roles</h3>
+                <span class="detector__count">6 found</span>
+              </div>
+              <ul class="rolelist">
+                <li>
+                  <span class="dot" aria-hidden="true"></span>
+                  <span class="role__name">Server Owner</span>
+                  <span class="role__pos">pos 12</span>
+                </li>
+                <li>
+                  <span class="dot" aria-hidden="true"></span>
+                  <span class="role__name">Head Admin</span>
+                  <span class="role__pos">pos 11</span>
+                </li>
+                <li>
+                  <span class="dot" aria-hidden="true"></span>
+                  <span class="role__name">Senior Mod</span>
+                  <span class="role__pos">pos 9</span>
+                </li>
+                <li>
+                  <span class="dot" aria-hidden="true"></span>
+                  <span class="role__name">t-mod</span>
+                  <span class="role__pos">pos 8</span>
+                </li>
+                <li>
+                  <span class="dot dot--soft" aria-hidden="true"></span>
+                  <span class="role__name">Nitro Booster</span>
+                  <span class="role__pos">pos 5</span>
+                </li>
+                <li>
+                  <span class="dot dot--soft" aria-hidden="true"></span>
+                  <span class="role__name">Members</span>
+                  <span class="role__pos">pos 1</span>
+                </li>
+              </ul>
+            </div>
+
+            <div class="detector__col">
+              <div class="detector__head">
+                <h3>StaffDesk reads it as</h3>
+                <span class="detector__count" data-tally>4 staff</span>
+              </div>
+              <ul class="rolelist verdicts" data-verdicts>
+                <li>
+                  <span class="verdict__top">
+                    <span class="rank">Owner</span>
+                    <span class="confidence">High</span>
+                  </span>
+                  <span class="verdict__why">Role name matches “owner”</span>
+                </li>
+                <li>
+                  <span class="verdict__top">
+                    <span class="rank">Admin</span>
+                    <span class="confidence">High</span>
+                  </span>
+                  <span class="verdict__why">Role name matches “head admin”</span>
+                </li>
+                <li>
+                  <span class="verdict__top">
+                    <span class="rank">Moderator</span>
+                    <span class="confidence">High</span>
+                  </span>
+                  <span class="verdict__why">Name match, confirmed by Ban Members</span>
+                </li>
+                <li>
+                  <span class="verdict__top">
+                    <span class="rank">Trial Moderator</span>
+                    <span class="confidence">High</span>
+                  </span>
+                  <span class="verdict__why">“t-mod” is read before “mod”</span>
+                </li>
+                <li>
+                  <span class="verdict__top">
+                    <span class="rank rank--none">Skipped</span>
+                    <span class="confidence">—</span>
+                  </span>
+                  <span class="verdict__why">Managed by an integration</span>
+                </li>
+                <li>
+                  <span class="verdict__top">
+                    <span class="rank rank--none">Not staff</span>
+                    <span class="confidence">—</span>
+                  </span>
+                  <span class="verdict__why">No moderation permissions</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================== FEATURES ========================== -->
+      <section class="shell band" id="features">
+        <div class="band__head">
+          <p class="eyebrow">What you get</p>
+          <h2 class="display">Everything your team currently keeps in a spreadsheet.</h2>
+          <p>
+            One profile per staff member, built automatically from the roles they already hold —
+            then kept current as those roles change.
+          </p>
+        </div>
+
+        <div class="features">
+          <article class="feature">
+            <p class="eyebrow">Profiles</p>
+            <h3>A record for every staff member</h3>
+            <p>
+              Avatar, rank, when they joined the server, and when they joined the team — plus every
+              promotion, note and warning attached to them.
+            </p>
+            <div class="feature__demo" aria-hidden="true">
+              <div class="kv"><span>rank</span><span>Moderator</span></div>
+              <div class="kv"><span>staff since</span><span>14 Mar 2025</span></div>
+              <div class="kv"><span>active warnings</span><span>1</span></div>
+            </div>
+          </article>
+
+          <article class="feature">
+            <p class="eyebrow">Warnings</p>
+            <h3>Issued once, recorded everywhere</h3>
+            <p>
+              Warn from Discord or the dashboard. StaffDesk saves the reason and evidence, DMs the
+              member, and tells you if that DM never arrived.
+            </p>
+            <div class="feature__demo" aria-hidden="true">
+              <div class="kv"><span>severity</span><span>Major</span></div>
+              <div class="kv"><span>issued by</span><span>@rin</span></div>
+              <div class="kv"><span>dm</span><span>Delivered</span></div>
+            </div>
+          </article>
+
+          <article class="feature">
+            <p class="eyebrow">Tasks</p>
+            <h3>Work you can actually chase</h3>
+            <p>
+              Assign a task with a due date and a priority. Everyone sees what is open, what is
+              overdue, and who owns it.
+            </p>
+            <div class="feature__demo" aria-hidden="true">
+              <div class="kv"><span>Review ticket backlog</span><span>Due Fri</span></div>
+              <div class="kv"><span>Rewrite rule 4</span><span>In progress</span></div>
+              <div class="kv"><span>Onboard new trial</span><span>Overdue</span></div>
+            </div>
+          </article>
+
+          <article class="feature">
+            <p class="eyebrow">Audit log</p>
+            <h3>Who did what, and when</h3>
+            <p>
+              Promotions, demotions, warnings, role changes and setup edits are appended to a log
+              that is never rewritten — so a decision from last year still reads correctly.
+            </p>
+            <div class="feature__demo" aria-hidden="true">
+              <div class="kv"><span>STAFF_PROMOTED</span><span>2 min ago</span></div>
+              <div class="kv"><span>WARNING_ISSUED</span><span>1 hr ago</span></div>
+              <div class="kv"><span>ROLES_SYNCED</span><span>Today 09:14</span></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- ======================== HOW IT WORKS ======================== -->
+      <section class="shell band" id="how">
+        <div class="band__head">
+          <p class="eyebrow">How it works</p>
+          <h2 class="display">Four steps, and none of them are data entry.</h2>
+        </div>
+
+        <ol class="steps">
+          <li class="step">
+            <div>
+              <h3>Log in with Discord</h3>
+              <p>
+                StaffDesk shows the servers you manage. Pick the one you want a workspace for.
+              </p>
+            </div>
+          </li>
+          <li class="step">
+            <div>
+              <h3>Invite the bot</h3>
+              <p>
+                If StaffDesk is not in that server yet, you will get an Invite StaffDesk button.
+                Approve it once and come straight back.
+              </p>
+            </div>
+          </li>
+          <li class="step">
+            <div>
+              <h3>Run <span class="mono">/setup</span></h3>
+              <p>
+                The bot reads every role and every member, then proposes which roles are staff and
+                why — from role names, Discord permissions and where each role sits in the
+                hierarchy.
+              </p>
+            </div>
+          </li>
+          <li class="step">
+            <div>
+              <h3>Confirm, and you are done</h3>
+              <p>
+                Correct anything the detection got wrong. Profiles are created for everyone holding
+                a staff role, and the dashboard fills in immediately.
+              </p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <!-- ============================= FAQ ============================= -->
+      <section class="shell band" id="faq">
+        <div class="band__head">
+          <p class="eyebrow">FAQ</p>
+          <h2 class="display">Questions worth asking first.</h2>
+        </div>
+
+        <div class="faq">
+          <details>
+            <summary>What if StaffDesk detects the wrong roles?</summary>
+            <p>
+              Every proposed role is shown with the reason it was picked and how confident the
+              detection is, so you can see what it was reasoning from. Change anything before you
+              confirm. Roles you set by hand are marked as manual and later syncs leave them alone.
+            </p>
+          </details>
+          <details>
+            <summary>What if none of our roles have obvious names?</summary>
+            <p>
+              Names are only the first signal. StaffDesk also reads Discord permissions — a role
+              that can ban or time out members is a staff role whatever it is called — and role
+              hierarchy position. If all three come back empty, you configure the roles yourself and
+              nothing is guessed.
+            </p>
+          </details>
+          <details>
+            <summary>What permissions does the bot ask for?</summary>
+            <p>
+              The invite link requests Administrator, which keeps setup to a single click and
+              avoids per-channel permission problems later. StaffDesk does not actually need it —
+              it reads roles and members through Discord's gateway intents, and otherwise only
+              posts messages. If you would rather grant the minimum, set
+              <span class="mono">BOT_PERMISSIONS</span> to
+              <span class="mono">84992</span> in <span class="mono">bot.py</span> and re-invite.
+            </p>
+          </details>
+          <details>
+            <summary>Do warnings show up in Discord?</summary>
+            <p>
+              The warned member gets a direct message with the reason. If they have DMs from server
+              members turned off, the warning is still recorded and the dashboard shows that it was
+              not delivered, so you know to follow up another way.
+            </p>
+          </details>
+          <details>
+            <summary>What happens when someone leaves the server?</summary>
+            <p>
+              Their profile is archived, not deleted. Warnings, tasks and audit entries stay
+              readable, and if they rejoin, the same profile picks back up.
+            </p>
+          </details>
+          <details>
+            <summary>Can more than one person manage the workspace?</summary>
+            <p>
+              Yes. The server owner has access by default and can grant it to any Discord role — so
+              your admin team signs in with the roles they already have.
+            </p>
+          </details>
+        </div>
+      </section>
+
+      <!-- =========================== CLOSER =========================== -->
+      <section class="shell closer">
+        <h2 class="display">Set it up before your next staff meeting.</h2>
+        <div class="hero__actions">
+          <a class="btn" href="login.html">Create Your Workspace</a>
+          <a class="btn btn--ghost" href="#how">See how it works</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="shell footer__inner">
+        <a class="wordmark" href="#top" aria-label="StaffDesk home">
+          <span class="wordmark__art" aria-hidden="true"></span>
+        </a>
+
+        <nav class="footer__links" aria-label="Footer">
+          <a href="#features">Features</a>
+          <a href="#how">How it works</a>
+          <a href="#faq">FAQ</a>
+          <a href="login.html">Log in with Discord</a>
+        </nav>
+
+        <p class="footer__legal">
+          © <span data-year>2026</span> StaffDesk · staffdesk.space — not affiliated with Discord
+          Inc.
+        </p>
+      </div>
+    </footer>
+
+    <script>
+      (() => {
+        'use strict';
+
+        document.querySelector('[data-year]').textContent = String(new Date().getFullYear());
+
+        /* ---------------------------------------------------------------
+           Detection panel.
+
+           Rows resolve one at a time, top to bottom, the way /setup actually
+           walks a role list. The sequence only starts once the panel is on
+           screen, so someone landing mid-page still sees it happen rather
+           than arriving after it finished.
+           --------------------------------------------------------------- */
+        const verdicts = document.querySelector('[data-verdicts]');
+        const status = document.querySelector('[data-status]');
+        const rows = verdicts ? Array.from(verdicts.children) : [];
+        const STEP_MS = 260;
+
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        function settle() {
+          status.textContent = '4 staff roles detected';
+        }
+
+        function run() {
+          if (reduceMotion) {
+            verdicts.classList.add('is-live');
+            settle();
+            return;
+          }
+
+          rows.forEach((row, index) => {
+            window.setTimeout(() => {
+              row.style.opacity = '1';
+              row.style.transform = 'none';
+              if (index === rows.length - 1) settle();
+            }, index * STEP_MS);
+          });
+        }
+
+        if (verdicts && rows.length) {
+          const observer = new IntersectionObserver(
+            (entries) => {
+              for (const entry of entries) {
+                if (!entry.isIntersecting) continue;
+                observer.disconnect();
+                window.setTimeout(run, 300);
+              }
+            },
+            { threshold: 0.3 },
+          );
+          observer.observe(verdicts);
+        }
+
+        /* ---------------------------------------------------------------
+           Where the app lives.
+
+           Empty means "same host", which is the case when bot.py serves this
+           page. Set it to the app's origin when the landing page is hosted
+           separately — on Vercel, say — because login cannot be static: the
+           token exchange needs the Discord client secret, so it has to happen
+           on the host running bot.py.
+
+               const APP_ORIGIN = 'https://app.staffdesk.space';
+           --------------------------------------------------------------- */
+        /* ---------------------------------------------------------------
+           Appearance. 'auto' removes the override and lets the OS decide;
+           the two explicit modes pin it and persist across visits.
+           --------------------------------------------------------------- */
+        const themeBox = document.querySelector('.theme');
+        if (themeBox) {
+          const root = document.documentElement;
+          const readTheme = () => {
+            try {
+              return localStorage.getItem('sd-theme') || 'auto';
+            } catch (e) {
+              return 'auto';
+            }
+          };
+          const paint = (value) => {
+            for (const button of themeBox.querySelectorAll('button')) {
+              button.setAttribute('aria-pressed', String(button.dataset.set === value));
+            }
+          };
+          themeBox.addEventListener('click', (event) => {
+            const button = event.target.closest('button[data-set]');
+            if (!button) return;
+            const value = button.dataset.set;
+            if (value === 'auto') delete root.dataset.theme;
+            else root.dataset.theme = value;
+            try {
+              localStorage.setItem('sd-theme', value);
+            } catch (e) {}
+            paint(value);
+          });
+          paint(readTheme());
+        }
+
+        const APP_ORIGIN = '';
+
+        if (APP_ORIGIN) {
+          const base = APP_ORIGIN.replace(/\/+$/, '');
+          for (const link of document.querySelectorAll('a[href="login.html"]')) {
+            link.setAttribute('href', base + '/login');
+          }
+        }
+      })();
+    </script>
+  </body>
+</html>

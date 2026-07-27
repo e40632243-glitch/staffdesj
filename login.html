@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Log in — StaffDesk</title>
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="logo.png" />
+
+    <!-- Applied before first paint, so dark-mode users never see a white
+         flash on the way in. -->
+    <script>
+      (() => {
+        try {
+          const t = localStorage.getItem('sd-theme');
+          if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t;
+        } catch (e) {}
+      })();
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..900&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      :root {
+        --paper: #ffffff;
+        --ink: #000000;
+        --ink-soft: #6b6b6b;
+        --ink-faint: #949494;
+        --rule: #e5e5e5;
+        --surface: #fafafa;
+        --discord: #5865f2;
+        --discord-hover: #4752c4;
+        --brandflip: 0;
+        color-scheme: light;
+      }
+
+      :root[data-theme='dark'] {
+        --paper: #0c0c0d;
+        --ink: #f2f2f3;
+        --ink-soft: #a0a0a6;
+        --ink-faint: #6c6c74;
+        --rule: #232328;
+        --surface: #151518;
+        --brandflip: 1;
+        color-scheme: dark;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme='light']) {
+          --paper: #0c0c0d;
+          --ink: #f2f2f3;
+          --ink-soft: #a0a0a6;
+          --ink-faint: #6c6c74;
+          --rule: #232328;
+          --surface: #151518;
+          --brandflip: 1;
+          color-scheme: dark;
+        }
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: 'Archivo', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+        font-size: 15px;
+        line-height: 1.55;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      :focus-visible {
+        outline: 2px solid var(--ink);
+        outline-offset: 3px;
+      }
+
+      .shell {
+        width: 100%;
+        max-width: 1120px;
+        margin-inline: auto;
+        padding-inline: 24px;
+      }
+
+      /* Cropped out of staffdesk.png, whose artwork occupies a 924x114 band of
+         an 1179x801 canvas. Explicit width, because a display:block box has an
+         auto width and aspect-ratio would derive the height from it instead. */
+      .brand {
+        display: block;
+        line-height: 0;
+      }
+
+      .brand span {
+        display: block;
+        width: 178px;
+        height: 22px;
+        background: url('staffdesk.png') no-repeat;
+        background-size: 127.6% 702.63%;
+        background-position: 57.25% 51.53%;
+        filter: invert(var(--brandflip));
+      }
+
+      header {
+        border-bottom: 1px solid var(--rule);
+      }
+
+      header .shell {
+        display: flex;
+        align-items: center;
+        height: 62px;
+      }
+
+      main {
+        flex: 1;
+        display: grid;
+        place-items: center;
+        padding-block: 56px;
+      }
+
+      .card {
+        width: 100%;
+        max-width: 440px;
+        border: 1px solid var(--rule);
+        border-radius: 14px;
+        padding: 36px 32px;
+        text-align: center;
+      }
+
+      .card h1 {
+        margin: 0 0 10px;
+        font-size: 1.75rem;
+        letter-spacing: -0.03em;
+        font-variation-settings: 'wdth' 110, 'wght' 800;
+        line-height: 1.1;
+      }
+
+      .card > p {
+        margin: 0 0 28px;
+        color: var(--ink-soft);
+      }
+
+      .discord {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        height: 48px;
+        border-radius: 8px;
+        background: var(--discord);
+        color: #fff;
+        text-decoration: none;
+        font-size: 0.9375rem;
+        font-variation-settings: 'wght' 600;
+        transition: background-color 0.16s ease;
+      }
+
+      .discord:hover {
+        background: var(--discord-hover);
+      }
+
+      .discord[aria-disabled='true'] {
+        background: var(--surface);
+        color: var(--ink-faint);
+        border: 1px solid var(--rule);
+        cursor: not-allowed;
+      }
+
+      .scopes {
+        list-style: none;
+        margin: 24px 0 0;
+        padding: 16px 0 0;
+        border-top: 1px solid var(--rule);
+        text-align: left;
+      }
+
+      .scopes li {
+        display: flex;
+        gap: 10px;
+        font-size: 13.5px;
+        color: var(--ink-soft);
+        padding-block: 5px;
+      }
+
+      .scopes li::before {
+        content: '·';
+        color: var(--ink);
+      }
+
+      .back {
+        margin-top: 26px;
+        font-size: 13.5px;
+        color: var(--ink-faint);
+      }
+
+      .back a {
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+
+      /* Shown only when the bot has not been configured, or when this file was
+         opened straight off disk rather than served. */
+      .notice {
+        max-width: 640px;
+        margin-top: 28px;
+        border: 1px solid var(--rule);
+        border-radius: 12px;
+        padding: 24px 26px;
+        text-align: left;
+      }
+
+      .notice:empty {
+        display: none;
+      }
+
+      .notice h2 {
+        margin: 0 0 6px;
+        font-size: 1.0625rem;
+        font-variation-settings: 'wdth' 106, 'wght' 700;
+        letter-spacing: -0.015em;
+      }
+
+      .notice > p {
+        margin: 0 0 18px;
+        color: var(--ink-soft);
+        font-size: 14px;
+      }
+
+      .notice ol {
+        counter-reset: s;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+
+      .notice ol li {
+        counter-increment: s;
+        position: relative;
+        padding: 13px 0 13px 42px;
+        border-top: 1px solid var(--rule);
+      }
+
+      .notice ol li::before {
+        content: counter(s, decimal-leading-zero);
+        position: absolute;
+        left: 0;
+        top: 15px;
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+        font-size: 11.5px;
+        color: var(--ink-faint);
+      }
+
+      .notice ol b {
+        display: block;
+        font-variation-settings: 'wght' 700;
+        margin-bottom: 3px;
+      }
+
+      .notice ol p {
+        margin: 0;
+        color: var(--ink-soft);
+        font-size: 13.5px;
+      }
+
+      code {
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+        font-size: 12.5px;
+        background: var(--surface);
+        border: 1px solid var(--rule);
+        border-radius: 4px;
+        padding: 2px 6px;
+        word-break: break-all;
+      }
+
+      footer {
+        border-top: 1px solid var(--rule);
+        padding-block: 24px 32px;
+        color: var(--ink-faint);
+        font-size: 13px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <header>
+      <div class="shell">
+        <a class="brand" href="index.html" aria-label="StaffDesk"><span></span></a>
+      </div>
+    </header>
+
+    <main>
+      <div class="shell" style="display: grid; place-items: center">
+        <div class="card">
+          <h1>Log in to StaffDesk</h1>
+          <p>Use the Discord account you manage your servers with.</p>
+
+          <!-- bot.py replaces AUTH_HREF with a real authorize URL, including a
+               one-time state value that it also sets as a cookie. -->
+          <a class="discord" id="discord-login" href="{{AUTH_HREF}}">
+            <svg width="20" height="15" viewBox="0 0 71 55" aria-hidden="true" fill="currentColor">
+              <path
+                d="M60.1 4.9A58.5 58.5 0 0 0 45.6.4a.2.2 0 0 0-.2.1c-.6 1.1-1.3 2.6-1.8 3.7a54 54 0 0 0-16.2 0c-.5-1.2-1.2-2.6-1.9-3.7a.2.2 0 0 0-.2-.1c-5 .9-9.9 2.4-14.4 4.5a.2.2 0 0 0-.1.1C1.6 18.7-1 32.1.3 45.4c0 .1 0 .2.1.2a58.9 58.9 0 0 0 17.8 9 .2.2 0 0 0 .2-.1c1.4-1.9 2.6-3.9 3.7-6a.2.2 0 0 0-.1-.3 38.8 38.8 0 0 1-5.5-2.6.2.2 0 0 1 0-.4l1.1-.9a.2.2 0 0 1 .2 0 42 42 0 0 0 35.6 0 .2.2 0 0 1 .2 0l1.1.9a.2.2 0 0 1 0 .4 36.4 36.4 0 0 1-5.5 2.6.2.2 0 0 0-.1.3c1.1 2.1 2.3 4.1 3.7 6a.2.2 0 0 0 .2.1 58.7 58.7 0 0 0 17.8-9 .2.2 0 0 0 .1-.2c1.5-15.3-2.5-28.6-10.7-40.4a.2.2 0 0 0-.1-.1ZM23.7 37.3c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2c3.6 0 6.5 3.3 6.4 7.2 0 4-2.8 7.2-6.4 7.2Zm23.7 0c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2c3.6 0 6.5 3.3 6.4 7.2 0 4-2.8 7.2-6.4 7.2Z"
+              />
+            </svg>
+            Continue with Discord
+          </a>
+
+          <ul class="scopes">
+            <li>Reads your username and avatar</li>
+            <li>Reads which servers you can manage — never their messages</li>
+            <li>Nothing is posted anywhere on your behalf</li>
+          </ul>
+
+          <p class="back">
+            <a href="index.html">Back to StaffDesk</a>
+          </p>
+        </div>
+
+        <!-- Filled in by bot.py when Discord is not configured yet. -->
+        <div class="notice" id="notice">{{NOTICE}}</div>
+      </div>
+    </main>
+
+    <!-- When bot.py has a Discord application configured it drops a redirect
+         in here, so pressing "Log in with Discord" goes straight to Discord
+         instead of stopping on this page. The card above stays as the
+         no-JavaScript fallback and as what you see if the redirect is slow. -->
+    {{AUTOGO}}
+
+    <footer>
+      <div class="shell">StaffDesk · staffdesk.space — not affiliated with Discord Inc.</div>
+    </footer>
+
+    <script>
+      (() => {
+        'use strict';
+
+        const button = document.getElementById('discord-login');
+        const notice = document.getElementById('notice');
+
+        /* An unreplaced placeholder means this file was opened directly rather
+           than served by bot.py. Say so plainly instead of letting the button
+           lead nowhere — the OAuth exchange needs the server, because it uses
+           the client secret, which cannot live in a page. */
+        const served = !button.getAttribute('href').includes('{{');
+
+        if (!served) {
+          button.setAttribute('href', '#');
+          button.setAttribute('aria-disabled', 'true');
+          button.addEventListener('click', (event) => event.preventDefault());
+        }
+
+        if (notice.textContent.includes('{{')) {
+          notice.innerHTML = '';
+        }
+
+        if (!served) {
+          notice.innerHTML = `
+            <h2>Start StaffDesk first</h2>
+            <p>You have opened this file straight from disk. Logging in needs the server,
+               because the Discord client secret has to stay out of the page.</p>
+            <ol>
+              <li><b>Run the bot</b><p>In this folder: <code>py bot.py</code></p></li>
+              <li><b>Open the site</b><p>Go to <code>http://localhost:8000</code> and press
+                Log in with Discord there.</p></li>
+            </ol>`;
+        }
+      })();
+    </script>
+  </body>
+</html>
