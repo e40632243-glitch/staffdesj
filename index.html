@@ -1328,9 +1328,19 @@
           paint(readTheme());
         }
 
-        const APP_ORIGIN = '';
+        const APP_ORIGIN = 'http://n-nyc-23.folium.host:25675';
 
-        if (APP_ORIGIN) {
+        /* Only rewrite when this page is NOT being served by the app itself.
+           The same file is deployed to Vercel and shipped with the bot, and on
+           the bot host the relative link is already correct — rewriting there
+           would send you on a pointless round trip to your own origin.
+           localhost is exempt too, so local testing keeps working after this
+           value is set for production. */
+        const here = window.location;
+        const isLocal = ['localhost', '127.0.0.1', ''].includes(here.hostname);
+        const isAppHost = APP_ORIGIN.replace(/\/+$/, '') === here.origin;
+
+        if (APP_ORIGIN && !isLocal && !isAppHost) {
           const base = APP_ORIGIN.replace(/\/+$/, '');
           for (const link of document.querySelectorAll('a[href="login.html"]')) {
             link.setAttribute('href', base + '/login');
