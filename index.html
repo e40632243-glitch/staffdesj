@@ -1223,7 +1223,7 @@
         </nav>
 
         <p class="footer__legal">
-          © <span data-year>2026</span> StaffDesk · staffdesk.space — not affiliated with Discord
+          © <span data-year>2026</span> StaffDesk · staffdesks.space — not affiliated with Discord
           Inc.
         </p>
       </div>
@@ -1285,18 +1285,6 @@
         }
 
         /* ---------------------------------------------------------------
-           Where the app lives.
-
-           Where the application lives. This page is static and can sit on
-           Vercel; login cannot, because the token exchange needs the Discord
-           client secret and so must happen on the host running bot.py.
-
-           Currently the Folium host directly. Once app.staffdesk.space is
-           live, change this to 'https://app.staffdesk.space' and update the
-           two matching values in .env. Set it to '' if you ever serve
-           everything from one host.
-           --------------------------------------------------------------- */
-        /* ---------------------------------------------------------------
            Appearance. 'auto' removes the override and lets the OS decide;
            the two explicit modes pin it and persist across visits.
            --------------------------------------------------------------- */
@@ -1329,7 +1317,21 @@
           paint(readTheme());
         }
 
-        const APP_ORIGIN = 'http://n-nyc-23.folium.host:25675';
+        /* ---------------------------------------------------------------
+           Where the app lives.
+
+           This page is static and sits on Vercel. Login cannot: the token
+           exchange needs the Discord client secret, so it has to happen on the
+           host running bot.py. That is why the two are on different names, and
+           why this value exists — it is what sends the login button across.
+
+           Must match STAFFDESK_BASE_URL in .env. If they disagree, login
+           either 404s or fails Discord's redirect check.
+
+           Set it to '' only if you ever serve everything from one host; the
+           rewrite below is skipped when empty, leaving the relative link.
+           --------------------------------------------------------------- */
+        const APP_ORIGIN = 'https://app.staffdesks.space';
 
         /* Only rewrite when this page is NOT being served by the app itself.
            The same file is deployed to Vercel and shipped with the bot, and on
